@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory Match</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    .card { transition: transform 0.6s; transform-style: preserve-3d; }
+    .card.flipped { transform: rotateY(180deg); }
+    .card-back, .card-front { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; }
+    .card-front { transform: rotateY(180deg); }
+    .fullscreen { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 50; background: #1a1a2e; }
+    .admin-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 100; }
+    .glow { box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+    .game-container { perspective: 1000px; }
+    .buttons-hidden { visibility: hidden; opacity: 0; transition: opacity 0.3s; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+  <!-- Game Interface -->
+  <div id="game-container" class="min-h-screen flex flex-col items-center justify-center p-4">
+    <h1 class="text-4xl font-bold mb-6 text-indigo-400">Memory Match</h1>
+    <div class="flex space-x-4 mb-4">
+      <p id="moves" class="text-lg">Moves: 0</p>
+      <p id="matches" class="text-lg">Matches: 0/0</p>
+    </div>
+    <div id="game-board" class="grid grid-cols-4 gap-4 max-w-2xl w-full"></div>
+    <div id="button-container" class="mt-6 flex space-x-4">
+      <button id="fullscreen-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded glow">Enter Fullscreen</button>
+      <button id="admin-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded glow">Admin Portal</button>
+    </div>
+  </div>
+
+  <!-- Admin Portal -->
+  <div id="admin-portal" class="admin-overlay hidden flex items-center justify-center">
+    <div class="bg-gray-800 p-6 rounded-lg w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-4 text-indigo-400">Admin Portal</h2>
+      <div class="mb-4">
+        <label class="block text-sm mb-2">Upload Card Images</label>
+        <input type="file" id="card-images" multiple accept="image/*" class="w-full text-sm bg-gray-700 p-2 rounded">
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm mb-2">Max Moves</label>
+        <input type="number" id="max-moves" min="1" value="50" class="w-full bg-gray-700 p-2 rounded">
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm mb-2">Grid Size (e.g., 4 for 4x4)</label>
+        <input type="number" id="grid-size" min="2" max="6" value="4" class="w-full bg-gray-700 p-2 rounded">
+      </div>
+      <div class="flex space-x-4">
+        <button id="save-admin" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded glow">Save</button>
+        <button id="close-admin" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded glow">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let moves = 0;
+    let matches = 0;
+    let maxMoves = 50;
+    let gridSize = 4;
+    let cards = [];
+    let flippedCards = [];
+    let lockBoard = false;
+    let totalPairs = 0;
+    let customImages = [];
+
+    const gameBoard = document.getElementById('game-board');
+    const movesDisplay = document.getElementById('moves');
+    const matchesDisplay = document.getElementById('matches');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const adminBtn = document.getElementById('admin-btn');
+    const buttonContainer = document.getElementById('button-container');
+    const adminPortal = document.getElementById('admin-portal');
+    const cardImagesInput = document.getElementById('card-images');
+    const maxMovesInput = document.getElementById('max-moves');
+    const gridSizeInput = document.getElementById('grid-size');
+    const saveAdminBtn = document.getElementById('save-admin');
+    const closeAdminBtn = document.getElementById('close-admin');
+
+    // Default card images (fallback)
+    const defaultImages = [
+      'https://via.placeholder.com/100?text=1',
+      'https://via.placeholder.com/100?text=2',
+      'https://via.placeholder.com/100?text=3',
+      'https://via.placeholder.com/100?text=4',
+      'https://via.placeholder.com/100?text=5',
+      'https://via.placeholder.com/100?text=6',
+      'https://via.placeholder.com/100?text=7',
+      'https://via.placeholder.com/100?text=8'
+    ];
+
+    function createBoard() {
+      gameBoard.innerHTML = '';
+      gameBoard.style.gridTemplateColumns = `repeat(${gridSize}, minmax(0, 1fr))`;
+      cards = [];
+      const images = customImages.length >= gridSize * gridSize / 2 ? customImages : defaultImages.slice(0, gridSize * gridSize / 2);
+      totalPairs = gridSize * gridSize / 2;
+      matchesDisplay.textContent = `Matches: 0/${totalPairs}`;
+      moves = 0;
+      matches = 0;
+      movesDisplay.textContent = `Moves: 0`;
+      flippedCards = [];
+
+      const cardValues = [...images, ...images].sort(() => Math.random() - 0.5);
+      cardValues.forEach((value, index) => {
+        const card = document.createElement('div');
+        card.classList.add('card', 'w-24', 'h-24', 'bg-gray-700', 'rounded-lg', 'relative', 'cursor-pointer');
+        card.dataset.value = value;
+
+        const cardBack = document.createElement('div');
+        cardBack.classList.add('card-back', 'bg-indigo-600', 'rounded-lg', 'flex', 'items-center', 'justify-center');
+        cardBack.innerHTML = '<svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>';
+
+        const cardFront = document.createElement('div');
+        cardFront.classList.add('card-front', 'bg-white', 'rounded-lg');
+        cardFront.innerHTML = `<img src="${value}" class="w-full h-full object-cover rounded-lg">`;
+
+        card.appendChild(cardBack);
+        card.appendChild(cardFront);
+        card.addEventListener('click', flipCard);
+        gameBoard.appendChild(card);
+        cards.push(card);
+      });
+    }
+
+    function flipCard() {
+      if (lockBoard || this.classList.contains('flipped') || flippedCards.length >= 2) return;
+      if (moves >= maxMoves && maxMoves > 0) {
+        alert('Max moves reached! Game over.');
+        return;
+      }
+
+      this.classList.add('flipped');
+      flippedCards.push(this);
+      moves++;
+      movesDisplay.textContent = `Moves: ${moves}`;
+
+      if (flippedCards.length === 2) {
+        lockBoard = true;
+        setTimeout(checkMatch, 1000);
+      }
+    }
+
+    function checkMatch() {
+      const [card1, card2] = flippedCards;
+      if (card1.dataset.value === card2.dataset.value) {
+        matches++;
+        matchesDisplay.textContent = `Matches: ${matches}/${totalPairs}`;
+        flippedCards = [];
+        lockBoard = false;
+        if (matches === totalPairs) {
+          setTimeout(() => {
+            confetti({
+              particleCount: 200,
+              spread: 70,
+              origin: { y: 0.6 }
+            });
+            alert('Congratulations! You won!');
+          }, 500);
+        }
+      } else {
+        card1.classList.remove('flipped');
+        card2.classList.remove('flipped');
+        flippedCards = [];
+        lockBoard = false;
+      }
+    }
+
+    function toggleFullscreen() {
+      const container = document.getElementById('game-container');
+      if (!document.fullscreenElement) {
+        container.requestFullscreen().then(() => {
+          container.classList.add('fullscreen');
+          buttonContainer.classList.add('buttons-hidden');
+          fullscreenBtn.textContent = 'Exit Fullscreen';
+        }).catch(err => alert('Fullscreen not supported'));
+      } else {
+        document.exitFullscreen().then(() => {
+          container.classList.remove('fullscreen');
+          buttonContainer.classList.remove('buttons-hidden');
+          fullscreenBtn.textContent = 'Enter Fullscreen';
+        });
+      }
+    }
+
+    function toggleAdminPortal() {
+      adminPortal.classList.toggle('hidden');
+    }
+
+    function saveAdminSettings() {
+      maxMoves = parseInt(maxMovesInput.value) || 50;
+      gridSize = parseInt(gridSizeInput.value) || 4;
+      if (gridSize < 2 || gridSize > 6) {
+        alert('Grid size must be between 2 and 6');
+        return;
+      }
+      const files = cardImagesInput.files;
+      customImages = [];
+      for (let file of files) {
+        customImages.push(URL.createObjectURL(file));
+      }
+      createBoard(); // Update the board immediately with new images
+      toggleAdminPortal();
+    }
+
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+    adminBtn.addEventListener('click', toggleAdminPortal);
+    saveAdminBtn.addEventListener('click', saveAdminSettings);
+    closeAdminBtn.addEventListener('click', toggleAdminPortal);
+
+    createBoard();
+  </script>
+</body>
+</html>
