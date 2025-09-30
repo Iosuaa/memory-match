@@ -18,6 +18,8 @@ interface GameState {
   lockBoard: boolean;
   gameCompleted: boolean;
   showCelebration: boolean;
+  gameOver: boolean;
+  showGameOver: boolean;
 }
 
 interface CardData {
@@ -42,7 +44,9 @@ function App() {
     flippedCards: [],
     lockBoard: false,
     gameCompleted: false,
-    showCelebration: false
+    showCelebration: false,
+    gameOver: false,
+    showGameOver: false
   });
 
   const [settings, setSettings] = useState<GameSettings>({
@@ -99,7 +103,9 @@ function App() {
       flippedCards: [],
       lockBoard: false,
       gameCompleted: false,
-      showCelebration: false
+      showCelebration: false,
+      gameOver: false,
+      showGameOver: false
     });
   };
 
@@ -110,7 +116,8 @@ function App() {
       gameState.flippedCards.includes(cardId) || 
       gameState.cards[cardId].isMatched ||
       gameState.flippedCards.length >= 2 ||
-      (settings.maxMoves > 0 && gameState.moves >= settings.maxMoves)
+      (settings.maxMoves > 0 && gameState.moves >= settings.maxMoves) ||
+      gameState.gameOver
     ) {
       return;
     }
@@ -118,6 +125,19 @@ function App() {
     const newFlippedCards = [...gameState.flippedCards, cardId];
     const newMoves = gameState.moves + 1;
 
+    // Check if max moves reached
+    if (settings.maxMoves > 0 && newMoves >= settings.maxMoves) {
+      setGameState(prev => ({
+        ...prev,
+        flippedCards: newFlippedCards,
+        moves: newMoves,
+        gameOver: true,
+        showGameOver: true,
+        lockBoard: true
+      }));
+      startAutoReset();
+      return;
+    }
     setGameState(prev => ({
       ...prev,
       flippedCards: newFlippedCards,
@@ -211,7 +231,13 @@ function App() {
       clearTimeout(resetTimeoutRef.current);
     }
     resetTimeoutRef.current = setTimeout(() => {
-      setGameState(prev => ({ ...prev, showCelebration: false, gameCompleted: false }));
+      setGameState(prev => ({ 
+        ...prev, 
+        showCelebration: false, 
+        gameCompleted: false,
+        showGameOver: false,
+        gameOver: false
+      }));
       initializeGame();
     }, 10000);
   };
@@ -456,6 +482,23 @@ function App() {
           </div>
         )}
       </div>
+        {/* Game Over Message */}
+        {gameState.showGameOver && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className={`bg-gradient-to-r from-red-800 to-orange-800 p-8 rounded-2xl text-center mx-4 shadow-2xl ${
+              isFullscreen ? 'max-w-2xl' : 'max-w-md'
+            }`}>
+              <div className={`text-red-400 mx-auto mb-4 ${isFullscreen ? 'text-8xl' : 'text-6xl'}`}>😞</div>
+              <h2 className={`font-bold mb-4 ${isFullscreen ? 'text-5xl' : 'text-3xl'}`}>Game Over!</h2>
+              <p className={`mb-4 ${isFullscreen ? 'text-2xl' : 'text-lg'}`}>
+                You used all <span className="font-bold text-orange-300">{gameState.moves}</span> moves!
+              </p>
+              <p className={`text-gray-300 ${isFullscreen ? 'text-lg' : 'text-sm'}`}>
+                Game will restart automatically in 10 seconds...
+              </p>
+            </div>
+          </div>
+        )}
 
       {/* Admin Panel */}
       {showAdmin && (
