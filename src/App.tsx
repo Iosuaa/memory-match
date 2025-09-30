@@ -147,7 +147,7 @@ function App() {
       );
       
       const newMatches = gameState.matches + 1;
-      const totalPairs = (settings.gridSize * settings.gridSize) / 2;
+      const totalPairs = (gridSize * gridSize) / 2;
       
       setGameState(prev => ({
         ...prev,
@@ -162,8 +162,8 @@ function App() {
       if (newMatches === totalPairs) {
         setTimeout(() => {
           triggerConfetti();
-          startAutoReset();
         }, 500);
+        startAutoReset();
       }
     } else {
       setGameState(prev => ({
@@ -207,7 +207,11 @@ function App() {
 
   // Start auto-reset timer
   const startAutoReset = () => {
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current);
+    }
     resetTimeoutRef.current = setTimeout(() => {
+      setGameState(prev => ({ ...prev, showCelebration: false, gameCompleted: false }));
       initializeGame();
     }, 10000);
   };
@@ -341,7 +345,7 @@ function App() {
 
         {/* Game Board */}
         <div 
-          className={`grid gap-3 mb-8 max-w-2xl w-full`}
+          className={`grid gap-4 mb-8 max-w-4xl w-full ${isFullscreen ? 'gap-6' : 'gap-4'}`}
           style={{ 
             gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
             perspective: '1000px'
@@ -351,7 +355,11 @@ function App() {
             <div
               key={card.id}
               onClick={() => handleCardFlip(card.id)}
-              className={`relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 cursor-pointer transition-all duration-700 transform-gpu ${
+              className={`relative ${
+                isFullscreen 
+                  ? 'w-32 h-32 lg:w-40 lg:h-40' 
+                  : 'w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28'
+              } cursor-pointer transition-all duration-700 transform-gpu ${
                 gameState.flippedCards.includes(card.id) || card.isMatched 
                   ? 'flipped' 
                   : 'hover:scale-105'
@@ -364,7 +372,7 @@ function App() {
                   <img 
                     src={settings.cardBackLogoUrl} 
                     alt="Card Back Logo" 
-                    className="w-32 h-32 object-contain"
+                    className="w-24 h-24 object-contain"
                   />
                 ) : (
                   <div className="w-8 h-8 border-2 border-white/50 rounded-full flex items-center justify-center">
@@ -431,15 +439,17 @@ function App() {
         )}
 
         {/* Game Completion Message */}
-        {gameState.gameCompleted && (
+        {gameState.showCelebration && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-gradient-to-r from-purple-800 to-pink-800 p-8 rounded-2xl text-center max-w-md mx-4 shadow-2xl">
-              <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
-              <h2 className="text-3xl font-bold mb-4">🎉 Congratulations! 🎉</h2>
-              <p className="text-lg mb-4">
+            <div className={`bg-gradient-to-r from-purple-800 to-pink-800 p-8 rounded-2xl text-center mx-4 shadow-2xl ${
+              isFullscreen ? 'max-w-2xl' : 'max-w-md'
+            }`}>
+              <Trophy className={`text-yellow-400 mx-auto mb-4 ${isFullscreen ? 'w-24 h-24' : 'w-16 h-16'}`} />
+              <h2 className={`font-bold mb-4 ${isFullscreen ? 'text-5xl' : 'text-3xl'}`}>🎉 Congratulations! 🎉</h2>
+              <p className={`mb-4 ${isFullscreen ? 'text-2xl' : 'text-lg'}`}>
                 You completed the game in <span className="font-bold text-indigo-300">{gameState.moves}</span> moves!
               </p>
-              <p className="text-sm text-gray-300">
+              <p className={`text-gray-300 ${isFullscreen ? 'text-lg' : 'text-sm'}`}>
                 Game will restart automatically in 10 seconds...
               </p>
             </div>
